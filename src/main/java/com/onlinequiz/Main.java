@@ -202,7 +202,7 @@ public class Main {
         TeacherDashboard(int id, String name) {
             super("Teacher Dashboard - " + name);
             teacherId = id;
-            setSize(760, 520);
+            setSize(900, 600);
             setLocationRelativeTo(null);
             setLayout(new BorderLayout(10, 10));
             Label heading = new Label("Welcome, " + name + " | Teacher Dashboard", Label.CENTER);
