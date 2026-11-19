@@ -7,18 +7,21 @@ A desktop-based academic project with separate Student and Teacher panels.
 ### Student
 - Student registration and login
 - View published quizzes
-- Attempt multiple-choice questions
-- Quiz countdown based on configured duration
-- Automatic score calculation
+- Attempt multiple-choice questions with a live countdown timer and automatic submission
+- Navigate using Previous and Next, save answers, and mark questions for review
+- Automatic score calculation and one submission per student per quiz
 - View previous results
-- One submission per student per quiz
+- View a leaderboard ranked by overall score percentage
 
 ### Teacher
 - Teacher registration and login
 - Create quizzes (initially saved as DRAFT)
 - Add multiple-choice questions
 - Publish quizzes after adding at least one question
+- Edit quiz details and schedules, or delete quizzes
+- Schedule quiz start and end date/time
 - View results submitted by students
+- Export a quiz's student results to CSV (opens in Excel)
 
 ### Technical details
 - Java 17
@@ -58,8 +61,12 @@ No database setup or external SQLite installation is required.
 6. Log in as a student, refresh available quizzes, select a quiz and attempt it.
 7. Check the result in My Results (student) or View Results (teacher).
 
+## Scheduling format
+Enter dates using `yyyy-MM-dd HH:mm` (24-hour time), for example `2026-12-01 09:30`. Leave both schedule fields blank if the quiz should be available as soon as it is published. When a schedule is set, students can start the quiz only between the configured start and end times.
+
 ## Notes
 - This is a local desktop application, not a hosted web application.
-- The quiz timer is checked between question dialogs. It does not forcibly close an already-open question dialog at the exact deadline.
+- The countdown timer runs during the quiz and automatically submits answers when time expires.
+- CSV exports contain student names, email addresses, quiz title, scores and submission timestamps. Store exported files securely.
 - The teacher registration is open for academic demonstration. For a production system, teacher accounts should require administrator approval.
 - Do not commit real student personal data or the generated database to a public repository.
