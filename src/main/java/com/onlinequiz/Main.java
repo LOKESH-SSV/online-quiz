@@ -565,7 +565,7 @@ public class Main {
         }
 
         private void viewResults() {
-            Dialog dialog = new Dialog(this, "Individual Quiz Results", true);
+            Dialog dialog = new Dialog(this, "Individual Quiz Results", false);
             dialog.setLayout(new BorderLayout(8, 8));
 
             Choice quizChoice = new Choice();
@@ -647,14 +647,13 @@ public class Main {
             };
 
             quizChoice.addItemListener(e -> loadSelectedResults.run());
-            close.addActionListener(e -> {
-                dialog.setVisible(false);
-                dialog.dispose();
-            });
+            // Keep the results window modeless so it never traps the teacher
+            // in a modal event loop. Both Close and the title-bar X dispose it.
+            close.addActionListener(e -> dialog.dispose());
+            dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
             dialog.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
-                    dialog.setVisible(false);
                     dialog.dispose();
                 }
             });
