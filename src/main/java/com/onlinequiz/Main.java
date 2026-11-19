@@ -39,7 +39,7 @@ public class Main {
 
         LoginFrame() {
             super("Online Quiz Application - Login");
-            setSize(470, 350);
+            setSize(520, 370);
             setLocationRelativeTo(null);
             setLayout(new BorderLayout(12, 12));
             setBackground(Color.WHITE);
@@ -70,17 +70,18 @@ public class Main {
 
             Panel buttons = new Panel(new FlowLayout());
             Button login = button("Login");
-            Button register = button("Create account");
+            Button studentRegister = button("Student Registration");
+            Button teacherRegister = button("Teacher Registration");
             Button exit = button("Exit");
             buttons.add(login);
-            buttons.add(register);
+            buttons.add(studentRegister);
+            buttons.add(teacherRegister);
             buttons.add(exit);
             add(buttons, BorderLayout.SOUTH);
 
             login.addActionListener(e -> login());
-            register.addActionListener(e -> {
-                new RegisterFrame(role.getSelectedItem()).setVisible(true);
-            });
+            studentRegister.addActionListener(e -> new RegisterFrame("Student").setVisible(true));
+            teacherRegister.addActionListener(e -> new RegisterFrame("Teacher").setVisible(true));
             exit.addActionListener(e -> dispose());
             addWindowListener(new WindowAdapter() {
                 public void windowClosing(WindowEvent e) { dispose(); }
