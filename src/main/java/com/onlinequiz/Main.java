@@ -565,7 +565,8 @@ public class Main {
         }
 
         private void viewResults() {
-            Frame dialog = new Frame("Individual Quiz Results");
+            javax.swing.JDialog dialog = new javax.swing.JDialog(this, "Individual Quiz Results", false);
+            dialog.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
             dialog.setLayout(new BorderLayout(8, 8));
 
             Choice quizChoice = new Choice();
@@ -653,14 +654,11 @@ public class Main {
                 dialog.setVisible(false);
                 dialog.dispose();
             });
+            // DISPOSE_ON_CLOSE handles the title-bar X; this listener is an
+            // additional safeguard for macOS window-close events.
             dialog.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
-                    dialog.setVisible(false);
-                    dialog.dispose();
-                }
-                @Override
-                public void windowClosed(WindowEvent e) {
                     dialog.dispose();
                 }
             });
