@@ -2,10 +2,14 @@ package com.onlinequiz;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.io.*;
 import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JOptionPane;
+import javax.swing.Timer;
 
 public class Main {
     private static final Color NAVY = new Color(30, 48, 80);
@@ -214,15 +218,23 @@ public class Main {
             Button questions = button("Add Questions");
             Button publish = button("Publish Quiz");
             Button results = button("View Results");
+            Button edit = button("Edit Quiz");
+            Button delete = button("Delete Quiz");
+            Button schedule = button("Schedule Quiz");
+            Button export = button("Export Results");
             Button refresh = button("Refresh");
             Button logout = button("Logout");
-            for (Button b : new Button[]{create, questions, publish, results, refresh, logout}) controls.add(b);
+            for (Button b : new Button[]{create, questions, publish, results, edit, delete, schedule, export, refresh, logout}) controls.add(b);
             add(controls, BorderLayout.SOUTH);
 
             create.addActionListener(e -> createQuiz());
             questions.addActionListener(e -> addQuestions());
             publish.addActionListener(e -> publishQuiz());
             results.addActionListener(e -> viewResults());
+            edit.addActionListener(e -> editQuiz());
+            delete.addActionListener(e -> deleteQuiz());
+            schedule.addActionListener(e -> scheduleQuiz());
+            export.addActionListener(e -> exportResults());
             refresh.addActionListener(e -> loadQuizzes());
             logout.addActionListener(e -> { dispose(); new LoginFrame().setVisible(true); });
             addWindowListener(new WindowAdapter() {
@@ -233,14 +245,17 @@ public class Main {
 
         private void loadQuizzes() {
             StringBuilder sb = new StringBuilder("YOUR QUIZZES\n==============================================\n");
-            String sql = "SELECT quiz_id,title,subject,duration,status FROM quizzes WHERE teacher_id=? ORDER BY quiz_id DESC";
+            String sql = "SELECT quiz_id,title,subject,duration,status,start_at,end_at FROM quizzes WHERE teacher_id=? ORDER BY quiz_id DESC";
             try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
                 ps.setInt(1, teacherId);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) sb.append("#").append(rs.getInt("quiz_id")).append(" | ")
                             .append(rs.getString("title")).append(" | ").append(rs.getString("subject"))
                             .append(" | ").append(rs.getInt("duration")).append(" min | ")
-                            .append(rs.getString("status")).append("\n");
+                            .append(rs.getString("status")).append(" | ")
+                            .append(rs.getString("start_at") == null ? "No start date" : rs.getString("start_at"))
+                            .append(" to ").append(rs.getString("end_at") == null ? "No end date" : rs.getString("end_at"))
+                            .append("\n");
                 }
             } catch (SQLException e) { sb.append("Error: ").append(e.getMessage()); }
             output.setText(sb.toString());
@@ -250,28 +265,130 @@ public class Main {
             TextField title = new TextField(28);
             TextField subject = new TextField(28);
             TextField duration = new TextField("20", 8);
-            Panel p = new Panel(new GridLayout(3, 2, 6, 8));
+            TextField startAt = new TextField(20);
+            TextField endAt = new TextField(20);
+            Panel p = new Panel(new GridLayout(5, 2, 6, 8));
             p.add(new Label("Quiz title:")); p.add(title);
             p.add(new Label("Subject:")); p.add(subject);
             p.add(new Label("Duration (minutes):")); p.add(duration);
+            p.add(new Label("Start (yyyy-MM-dd HH:mm, optional):")); p.add(startAt);
+            p.add(new Label("End (yyyy-MM-dd HH:mm, optional):")); p.add(endAt);
             if (JOptionPane.showConfirmDialog(this, p, "Create quiz (saved as DRAFT)",
                     JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
             try {
                 int mins = Integer.parseInt(duration.getText().trim());
                 if (title.getText().trim().isEmpty() || subject.getText().trim().isEmpty() || mins <= 0)
                     throw new IllegalArgumentException();
+                String start = parseSchedule(startAt.getText());
+                String end = parseSchedule(endAt.getText());
+                if (start != null && end != null && !LocalDateTime.parse(start.replace(" ", "T")).isBefore(
+                        LocalDateTime.parse(end.replace(" ", "T")))) throw new IllegalArgumentException();
                 try (Connection c = Database.getConnection();
                      PreparedStatement ps = c.prepareStatement(
-                             "INSERT INTO quizzes(teacher_id,title,subject,duration) VALUES(?,?,?,?)")) {
+                             "INSERT INTO quizzes(teacher_id,title,subject,duration,start_at,end_at) VALUES(?,?,?,?,?,?)")) {
                     ps.setInt(1, teacherId);
                     ps.setString(2, title.getText().trim());
                     ps.setString(3, subject.getText().trim());
                     ps.setInt(4, mins);
+                    ps.setString(5, start);
+                    ps.setString(6, end);
                     ps.executeUpdate();
                 }
                 message(this, "Quiz created as DRAFT. Add questions, then publish it.", "Success");
                 loadQuizzes();
             } catch (Exception ex) { message(this, "Enter valid quiz details and a positive duration.", "Invalid input"); }
+        }
+
+        private String parseSchedule(String value) {
+            if (value == null || value.trim().isEmpty()) return null;
+            return LocalDateTime.parse(value.trim().replace(" ", "T"))
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+
+        private void editQuiz() {
+            Integer id = ownedQuizId("Enter the quiz ID to edit:");
+            if (id == null) return;
+            try (Connection con = Database.getConnection();
+                 PreparedStatement ps = con.prepareStatement(
+                         "SELECT title,subject,duration,start_at,end_at FROM quizzes WHERE quiz_id=? AND teacher_id=?")) {
+                ps.setInt(1,id); ps.setInt(2,teacherId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return;
+                    TextField title = new TextField(rs.getString("title"),28);
+                    TextField subject = new TextField(rs.getString("subject"),28);
+                    TextField duration = new TextField(String.valueOf(rs.getInt("duration")),8);
+                    TextField start = new TextField(rs.getString("start_at") == null ? "" : rs.getString("start_at").substring(0,16),20);
+                    TextField end = new TextField(rs.getString("end_at") == null ? "" : rs.getString("end_at").substring(0,16),20);
+                    Panel p = new Panel(new GridLayout(5,2,6,8));
+                    p.add(new Label("Title:")); p.add(title);
+                    p.add(new Label("Subject:")); p.add(subject);
+                    p.add(new Label("Duration:")); p.add(duration);
+                    p.add(new Label("Start (yyyy-MM-dd HH:mm):")); p.add(start);
+                    p.add(new Label("End (yyyy-MM-dd HH:mm):")); p.add(end);
+                    if (JOptionPane.showConfirmDialog(this,p,"Edit Quiz #"+id,JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION) return;
+                    int mins = Integer.parseInt(duration.getText().trim());
+                    String startValue=parseSchedule(start.getText()), endValue=parseSchedule(end.getText());
+                    if(title.getText().trim().isEmpty() || subject.getText().trim().isEmpty() || mins<=0) throw new IllegalArgumentException();
+                    if(startValue!=null && endValue!=null && !LocalDateTime.parse(startValue.replace(" ","T")).isBefore(LocalDateTime.parse(endValue.replace(" ","T")))) throw new IllegalArgumentException();
+                    try(PreparedStatement update=con.prepareStatement("UPDATE quizzes SET title=?,subject=?,duration=?,start_at=?,end_at=? WHERE quiz_id=? AND teacher_id=?")){
+                        update.setString(1,title.getText().trim()); update.setString(2,subject.getText().trim());
+                        update.setInt(3,mins); update.setString(4,startValue); update.setString(5,endValue);
+                        update.setInt(6,id); update.setInt(7,teacherId); update.executeUpdate();
+                    }
+                    message(this,"Quiz details updated.","Success"); loadQuizzes();
+                }
+            } catch(Exception ex){ message(this,"Could not update quiz. Check the date format and details.","Edit error"); }
+        }
+
+        private void deleteQuiz() {
+            Integer id=ownedQuizId("Enter the quiz ID to delete (its questions and results will also be deleted):");
+            if(id==null) return;
+            if(JOptionPane.showConfirmDialog(this,"Permanently delete quiz #"+id+" and its related questions/results?","Confirm deletion",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION) return;
+            try(Connection con=Database.getConnection(); PreparedStatement ps=con.prepareStatement("DELETE FROM quizzes WHERE quiz_id=? AND teacher_id=?")){
+                ps.setInt(1,id); ps.setInt(2,teacherId);
+                message(this,ps.executeUpdate()==1?"Quiz deleted.":"Quiz was not deleted.","Delete quiz"); loadQuizzes();
+            }catch(SQLException ex){message(this,ex.getMessage(),"Database error");}
+        }
+
+        private void scheduleQuiz() {
+            Integer id=ownedQuizId("Enter the quiz ID to schedule:");
+            if(id==null) return;
+            TextField start=new TextField(20), end=new TextField(20);
+            Panel p=new Panel(new GridLayout(2,2,6,8));
+            p.add(new Label("Start (yyyy-MM-dd HH:mm):")); p.add(start);
+            p.add(new Label("End (yyyy-MM-dd HH:mm):")); p.add(end);
+            if(JOptionPane.showConfirmDialog(this,p,"Schedule quiz",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
+            try{
+                String a=parseSchedule(start.getText()), b=parseSchedule(end.getText());
+                if(a==null || b==null || !LocalDateTime.parse(a.replace(" ","T")).isBefore(LocalDateTime.parse(b.replace(" ","T")))) throw new IllegalArgumentException();
+                try(Connection con=Database.getConnection();PreparedStatement ps=con.prepareStatement("UPDATE quizzes SET start_at=?,end_at=? WHERE quiz_id=? AND teacher_id=?")){
+                    ps.setString(1,a);ps.setString(2,b);ps.setInt(3,id);ps.setInt(4,teacherId);ps.executeUpdate();
+                }
+                message(this,"Quiz schedule saved.","Success");loadQuizzes();
+            }catch(Exception ex){message(this,"Enter valid dates in yyyy-MM-dd HH:mm format. End must be after start.","Schedule error");}
+        }
+
+        private void exportResults() {
+            Integer id=ownedQuizId("Enter the quiz ID whose results you want to export:");
+            if(id==null)return;
+            FileDialog chooser=new FileDialog(this,"Save results CSV",FileDialog.SAVE);
+            chooser.setFile("quiz_"+id+"_results.csv"); chooser.setVisible(true);
+            if(chooser.getFile()==null)return;
+            File file=new File(chooser.getDirectory(),chooser.getFile());
+            String sql="SELECT s.name,s.email,q.title,r.score,r.total_questions,r.submitted_at FROM results r JOIN students s ON s.student_id=r.student_id JOIN quizzes q ON q.quiz_id=r.quiz_id WHERE q.quiz_id=? AND q.teacher_id=? ORDER BY r.score DESC,r.submitted_at";
+            try(Connection con=Database.getConnection();PreparedStatement ps=con.prepareStatement(sql); PrintWriter out=new PrintWriter(new OutputStreamWriter(new FileOutputStream(file),java.nio.charset.StandardCharsets.UTF_8))){
+                ps.setInt(1,id);ps.setInt(2,teacherId);
+                out.println("Student Name,Email,Quiz Title,Score,Total Questions,Submitted At");
+                try(ResultSet rs=ps.executeQuery()){
+                    while(rs.next()) out.println(csv(rs.getString("name"))+","+csv(rs.getString("email"))+","+csv(rs.getString("title"))+","+rs.getInt("score")+","+rs.getInt("total_questions")+","+csv(rs.getString("submitted_at")));
+                }
+                message(this,"Results exported to:\n"+file.getAbsolutePath(),"Export successful");
+            }catch(Exception ex){message(this,"Export failed: "+ex.getMessage(),"Export error");}
+        }
+
+        private String csv(String value) {
+            if(value==null)return "\"\"";
+            return "\"" + value.replace("\"","\\"") + "\"";
         }
 
         private Integer ownedQuizId(String prompt) {
@@ -401,12 +518,14 @@ public class Main {
             Button refresh = button("Available Quizzes");
             Button attempt = button("Attempt Selected Quiz");
             Button history = button("My Results");
+            Button leaderboard = button("Leaderboard");
             Button logout = button("Logout");
-            controls.add(refresh); controls.add(attempt); controls.add(history); controls.add(logout);
+            controls.add(refresh); controls.add(attempt); controls.add(history); controls.add(leaderboard); controls.add(logout);
             add(controls, BorderLayout.SOUTH);
             refresh.addActionListener(e -> loadQuizzes());
             attempt.addActionListener(e -> attemptQuiz());
             history.addActionListener(e -> showHistory());
+            leaderboard.addActionListener(e -> showLeaderboard());
             logout.addActionListener(e -> { dispose(); new LoginFrame().setVisible(true); });
             addWindowListener(new WindowAdapter() {
                 public void windowClosing(WindowEvent e) { dispose(); }
@@ -421,6 +540,8 @@ public class Main {
                 SELECT q.quiz_id,q.title,q.subject,q.duration
                 FROM quizzes q
                 WHERE q.status='PUBLISHED'
+                  AND (q.start_at IS NULL OR datetime('now','localtime') >= datetime(q.start_at))
+                  AND (q.end_at IS NULL OR datetime('now','localtime') <= datetime(q.end_at))
                   AND NOT EXISTS (SELECT 1 FROM results r WHERE r.quiz_id=q.quiz_id AND r.student_id=?)
                 ORDER BY q.quiz_id DESC
                 """;
@@ -440,48 +561,86 @@ public class Main {
         }
 
         private void attemptQuiz() {
-            if (quizzes.isEmpty()) { message(this, "No available quizzes. Click Available Quizzes to refresh.", "No quizzes"); return; }
-            Choice choice = new Choice();
-            for (QuizInfo q : quizzes) choice.add(q.toString());
-            Panel p = new Panel(new FlowLayout());
-            p.add(new Label("Choose quiz:")); p.add(choice);
-            if (JOptionPane.showConfirmDialog(this, p, "Select quiz", JOptionPane.OK_CANCEL_OPTION)
-                    != JOptionPane.OK_OPTION) return;
-            QuizInfo selected = quizzes.get(choice.getSelectedIndex());
-            List<QuestionInfo> questions = getQuestions(selected.id());
-            if (questions.isEmpty()) { message(this, "This quiz has no questions.", "Quiz unavailable"); return; }
+            if (quizzes.isEmpty()) { message(this,"No available quizzes. Refresh the list.","No quizzes"); return; }
+            Choice choice=new Choice();
+            for(QuizInfo q:quizzes)choice.add(q.toString());
+            Panel select=new Panel(new FlowLayout());select.add(new Label("Choose quiz:"));select.add(choice);
+            if(JOptionPane.showConfirmDialog(this,select,"Select quiz",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
+            QuizInfo selected=quizzes.get(choice.getSelectedIndex());
+            List<QuestionInfo> questions=getQuestions(selected.id());
+            if(questions.isEmpty()){message(this,"This quiz has no questions.","Unavailable");return;}
+            String[] answers=new String[questions.size()];
+            boolean[] review=new boolean[questions.size()];
+            final int[] current={0};
+            Dialog exam=new Dialog(this,"Quiz: "+selected.title(),true);
+            exam.setLayout(new BorderLayout(10,10));exam.setSize(650,430);exam.setLocationRelativeTo(this);
+            Label timerLabel=new Label("",Label.CENTER);timerLabel.setFont(new Font("Arial",Font.BOLD,18));
+            Label progress=new Label("",Label.CENTER);
+            TextArea questionText=new TextArea("",6,55,TextArea.SCROLLBARS_VERTICAL_ONLY);questionText.setEditable(false);
+            Choice answerChoice=new Choice();for(String opt:new String[]{"A","B","C","D"})answerChoice.add(opt);
+            Panel center=new Panel(new BorderLayout(5,5));center.add(progress,BorderLayout.NORTH);center.add(questionText,BorderLayout.CENTER);
+            Panel answerPanel=new Panel(new FlowLayout());answerPanel.add(new Label("Your answer:"));answerPanel.add(answerChoice);
+            center.add(answerPanel,BorderLayout.SOUTH);
+            exam.add(timerLabel,BorderLayout.NORTH);exam.add(center,BorderLayout.CENTER);
+            Panel nav=new Panel(new FlowLayout());
+            Button previous=button("Previous"),next=button("Next"),mark=button("Mark for Review"),submit=button("Submit Quiz");
+            nav.add(previous);nav.add(next);nav.add(mark);nav.add(submit);exam.add(nav,BorderLayout.SOUTH);
+            Runnable showQuestion=()->{
+                QuestionInfo q=questions.get(current[0]);
+                progress.setText("Question "+(current[0]+1)+" of "+questions.size()+" | "+(answers[current[0]]==null?"Not answered":"Answered")+(review[current[0]]?" | Marked for review":""));
+                questionText.setText(q.text()+"\n\nA. "+q.options()[0]+"\nB. "+q.options()[1]+"\nC. "+q.options()[2]+"\nD. "+q.options()[3]);
+                answerChoice.select(answers[current[0]]==null?"A":answers[current[0]]);
+                previous.setEnabled(current[0]>0);next.setEnabled(current[0]<questions.size()-1);
+                mark.setLabel(review[current[0]]?"Unmark Review":"Mark for Review");
+            };
+            answerChoice.addItemListener(e->{if(answerChoice.getSelectedItem()!=null)answers[current[0]]=answerChoice.getSelectedItem();});
+            previous.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();if(current[0]>0)current[0]--;showQuestion.run();});
+            next.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();if(current[0]<questions.size()-1)current[0]++;showQuestion.run();});
+            mark.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();review[current[0]]=!review[current[0]];showQuestion.run();});
+            final boolean[] submitted={false};
+            Runnable finish=()->{
+                if(submitted[0])return;
+                submitted[0]=true;
+                int score=0;List<String> answerList=new ArrayList<>();
+                for(int i=0;i<questions.size();i++){String a=answers[i]==null?"":answers[i];answerList.add(a);if(a.equals(questions.get(i).correct()))score++;}
+                saveResult(selected.id(),questions,answerList,score);
+                exam.dispose();
+                message(this,"Quiz submitted!\nScore: "+score+" / "+questions.size(),"Quiz result");
+                loadQuizzes();
+            };
+            submit.addActionListener(e->{
+                answers[current[0]]=answerChoice.getSelectedItem();
+                int confirm=JOptionPane.showConfirmDialog(exam,"Submit your quiz now?","Confirm submission",JOptionPane.YES_NO_OPTION);
+                if(confirm==JOptionPane.YES_OPTION)finish.run();
+            });
+            exam.addWindowListener(new WindowAdapter(){public void windowClosing(WindowEvent e){
+                int confirm=JOptionPane.showConfirmDialog(exam,"Close and cancel this quiz attempt?","Cancel quiz",JOptionPane.YES_NO_OPTION);
+                if(confirm==JOptionPane.YES_OPTION)exam.dispose();
+            }});
+            long deadline=System.currentTimeMillis()+selected.duration()*60_000L;
+            Timer countdown=new Timer(1000,e->{
+                long remaining=deadline-System.currentTimeMillis();
+                if(remaining<=0){timerLabel.setText("Time remaining: 00:00");countdownStop((Timer)e.getSource());finish.run();}
+                else timerLabel.setText(String.format("Time remaining: %02d:%02d",remaining/60000,(remaining/1000)%60));
+            });
+            showQuestion.run();
+            timerLabel.setText("Time remaining: "+selected.duration()+":00");
+            countdown.start();exam.setVisible(true);countdown.stop();
+        }
 
-            List<String> answers = new ArrayList<>();
-            long endTime = System.currentTimeMillis() + selected.duration() * 60_000L;
-            for (int i = 0; i < questions.size(); i++) {
-                QuestionInfo q = questions.get(i);
-                long remaining = endTime - System.currentTimeMillis();
-                if (remaining <= 0) {
-                    message(this, "Time is up. Remaining questions will be submitted unanswered.", "Time up");
-                    break;
-                }
-                String prompt = "Question " + (i + 1) + " of " + questions.size()
-                        + "\nTime remaining: " + (remaining / 60000) + " min " + ((remaining / 1000) % 60) + " sec\n\n"
-                        + q.text() + "\n\nA. " + q.options()[0] + "\nB. " + q.options()[1]
-                        + "\nC. " + q.options()[2] + "\nD. " + q.options()[3];
-                String[] choices = {"A", "B", "C", "D"};
-                Object answer = JOptionPane.showInputDialog(this, prompt, "Online Quiz",
-                        JOptionPane.QUESTION_MESSAGE, null, choices, choices[0]);
-                answers.add(answer == null ? "" : answer.toString());
-                if (answer == null) {
-                    int confirm = JOptionPane.showConfirmDialog(this, "Cancel this quiz attempt?",
-                            "Confirm", JOptionPane.YES_NO_OPTION);
-                    if (confirm == JOptionPane.YES_OPTION) return;
-                    answers.set(answers.size() - 1, "");
-                }
-            }
-            int score = 0;
-            for (int i = 0; i < answers.size(); i++)
-                if (!answers.get(i).isEmpty() && answers.get(i).equals(questions.get(i).correct())) score++;
+        private void countdownStop(Timer timer){timer.stop();}
 
-            saveResult(selected.id(), questions, answers, score);
-            message(this, "Quiz submitted successfully!\nYour score: " + score + " / " + questions.size(), "Quiz result");
-            loadQuizzes();
+        private void showLeaderboard() {
+            StringBuilder sb=new StringBuilder("LEADERBOARD - TOTAL QUIZ PERFORMANCE\n========================================================\n");
+            String sql="SELECT s.name, SUM(r.score) AS marks, SUM(r.total_questions) AS total, COUNT(r.result_id) AS attempts FROM results r JOIN students s ON s.student_id=r.student_id GROUP BY s.student_id ORDER BY (1.0*SUM(r.score)/NULLIF(SUM(r.total_questions),0)) DESC, SUM(r.score) DESC, s.name LIMIT 50";
+            try(Connection con=Database.getConnection();PreparedStatement ps=con.prepareStatement(sql);ResultSet rs=ps.executeQuery()){
+                int rank=1;while(rs.next())sb.append(rank++).append(". ").append(rs.getString("name"))
+                        .append(" | ").append(rs.getInt("marks")).append("/").append(rs.getInt("total"))
+                        .append(" | Attempts: ").append(rs.getInt("attempts")).append("\n");
+                if(rank==1)sb.append("No quiz results yet.");
+            }catch(SQLException ex){sb.append("Error: ").append(ex.getMessage());}
+            TextArea area=new TextArea(sb.toString(),18,65,TextArea.SCROLLBARS_VERTICAL_ONLY);area.setEditable(false);
+            Dialog d=new Dialog(this,"Student Leaderboard",true);d.add(area);d.setSize(600,400);d.setLocationRelativeTo(this);d.setVisible(true);
         }
 
         private List<QuestionInfo> getQuestions(int quizId) {
