@@ -216,6 +216,7 @@ public class Main {
             Panel controls = new Panel(new FlowLayout());
             Button create = button("Create Quiz");
             Button questions = button("Add Questions");
+            Button editQuestions = button("Edit Questions");
             Button publish = button("Publish Quiz");
             Button results = button("View Results");
             Button edit = button("Edit Quiz");
@@ -224,11 +225,12 @@ public class Main {
             Button export = button("Export Results");
             Button refresh = button("Refresh");
             Button logout = button("Logout");
-            for (Button b : new Button[]{create, questions, publish, results, edit, delete, schedule, export, refresh, logout}) controls.add(b);
+            for (Button b : new Button[]{create, questions, editQuestions, publish, results, edit, delete, schedule, export, refresh, logout}) controls.add(b);
             add(controls, BorderLayout.SOUTH);
 
             create.addActionListener(e -> createQuiz());
             questions.addActionListener(e -> addQuestions());
+            editQuestions.addActionListener(e -> editQuestions());
             publish.addActionListener(e -> publishQuiz());
             results.addActionListener(e -> viewResults());
             edit.addActionListener(e -> editQuiz());
@@ -406,6 +408,100 @@ public class Main {
                 message(this, "Quiz ID not found under your account.", "Not found");
             } catch (Exception e) { message(this, "Enter a valid numeric quiz ID.", "Invalid input"); }
             return null;
+        }
+
+        private void editQuestions() {
+            Integer quizId = ownedQuizId("Enter the quiz ID whose questions you want to edit:");
+            if (quizId == null) return;
+
+            Choice questionChoice = new Choice();
+            List<Integer> questionIds = new ArrayList<>();
+            try (Connection con = Database.getConnection();
+                 PreparedStatement ps = con.prepareStatement(
+                         "SELECT question_id, question_text FROM questions WHERE quiz_id=? ORDER BY question_id")) {
+                ps.setInt(1, quizId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        questionIds.add(rs.getInt("question_id"));
+                        String text = rs.getString("question_text").replaceAll("\\s+", " ").trim();
+                        if (text.length() > 55) text = text.substring(0, 52) + "...";
+                        questionChoice.add("#" + rs.getInt("question_id") + " - " + text);
+                    }
+                }
+            } catch (SQLException ex) {
+                message(this, "Could not load questions: " + ex.getMessage(), "Database error");
+                return;
+            }
+
+            if (questionIds.isEmpty()) {
+                message(this, "This quiz does not contain any questions yet.", "No questions");
+                return;
+            }
+
+            Panel selector = new Panel(new GridLayout(2, 1, 5, 5));
+            selector.add(new Label("Select the question you want to edit:"));
+            selector.add(questionChoice);
+            if (JOptionPane.showConfirmDialog(this, selector, "Choose question",
+                    JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+
+            int questionId = questionIds.get(questionChoice.getSelectedIndex());
+            try (Connection con = Database.getConnection();
+                 PreparedStatement ps = con.prepareStatement(
+                         "SELECT question_text,option_a,option_b,option_c,option_d,correct_option FROM questions WHERE question_id=? AND quiz_id=?")) {
+                ps.setInt(1, questionId);
+                ps.setInt(2, quizId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        message(this, "Question not found.", "Not found");
+                        return;
+                    }
+
+                    TextField question = new TextField(rs.getString("question_text"), 38);
+                    TextField optionA = new TextField(rs.getString("option_a"), 30);
+                    TextField optionB = new TextField(rs.getString("option_b"), 30);
+                    TextField optionC = new TextField(rs.getString("option_c"), 30);
+                    TextField optionD = new TextField(rs.getString("option_d"), 30);
+                    Choice correct = new Choice();
+                    for (String option : new String[]{"A", "B", "C", "D"}) correct.add(option);
+                    correct.select(rs.getString("correct_option"));
+
+                    Panel form = new Panel(new GridLayout(6, 2, 6, 7));
+                    form.add(new Label("Question:")); form.add(question);
+                    form.add(new Label("Option A:")); form.add(optionA);
+                    form.add(new Label("Option B:")); form.add(optionB);
+                    form.add(new Label("Option C:")); form.add(optionC);
+                    form.add(new Label("Option D:")); form.add(optionD);
+                    form.add(new Label("Correct option:")); form.add(correct);
+
+                    if (JOptionPane.showConfirmDialog(this, form, "Edit Question #" + questionId,
+                            JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+
+                    if (question.getText().trim().isEmpty() || optionA.getText().trim().isEmpty()
+                            || optionB.getText().trim().isEmpty() || optionC.getText().trim().isEmpty()
+                            || optionD.getText().trim().isEmpty()) {
+                        message(this, "All question and option fields are required.", "Validation");
+                        return;
+                    }
+
+                    String updateSql = "UPDATE questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_option=? WHERE question_id=? AND quiz_id=?";
+                    try (PreparedStatement update = con.prepareStatement(updateSql)) {
+                        update.setString(1, question.getText().trim());
+                        update.setString(2, optionA.getText().trim());
+                        update.setString(3, optionB.getText().trim());
+                        update.setString(4, optionC.getText().trim());
+                        update.setString(5, optionD.getText().trim());
+                        update.setString(6, correct.getSelectedItem());
+                        update.setInt(7, questionId);
+                        update.setInt(8, quizId);
+                        update.executeUpdate();
+                    }
+                    message(this, "Question updated successfully. Existing student scores are not recalculated.",
+                            "Success");
+                    loadQuizzes();
+                }
+            } catch (SQLException ex) {
+                message(this, "Could not update question: " + ex.getMessage(), "Database error");
+            }
         }
 
         private void addQuestions() {
