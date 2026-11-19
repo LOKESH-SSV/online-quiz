@@ -17,6 +17,7 @@ A desktop-based academic project with separate Student and Teacher panels.
 - Teacher registration and login
 - Create quizzes (initially saved as DRAFT)
 - Add multiple-choice questions
+- Edit existing questions and answer choices even after a quiz is published
 - Publish quizzes after adding at least one question
 - Edit quiz details and schedules, or delete quizzes
 - Schedule quiz start and end date/time
