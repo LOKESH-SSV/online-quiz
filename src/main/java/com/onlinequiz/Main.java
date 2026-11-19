@@ -609,11 +609,11 @@ public class Main {
             Runnable loadSelectedResults = () -> {
                 int quizId = quizIds.get(quizChoice.getSelectedIndex());
                 StringBuilder sb = new StringBuilder();
-                sb.append("RESULTS FOR ").append(quizChoice.getSelectedItem()).append("\\n");
-                sb.append("======================================================================\\n");
+                sb.append("RESULTS FOR ").append(quizChoice.getSelectedItem()).append("\n");
+                sb.append("======================================================================\n");
                 sb.append(String.format("%-22s %-28s %-10s %-20s%n",
                         "STUDENT", "EMAIL", "SCORE", "SUBMITTED AT"));
-                sb.append("----------------------------------------------------------------------\\n");
+                sb.append("----------------------------------------------------------------------\n");
 
                 String sql = """
                     SELECT s.name,s.email,r.score,r.total_questions,r.submitted_at
@@ -636,8 +636,8 @@ public class Main {
                                     rs.getInt("score"), rs.getInt("total_questions"),
                                     rs.getString("submitted_at")));
                         }
-                        if (count == 0) sb.append("No students have attempted this quiz yet.\\n");
-                        else sb.append("\\nTotal submissions: ").append(count).append("\\n");
+                        if (count == 0) sb.append("No students have attempted this quiz yet.\n");
+                        else sb.append("\nTotal submissions: ").append(count).append("\n");
                     }
                 } catch (SQLException ex) {
                     sb.append("Could not load results: ").append(ex.getMessage());
