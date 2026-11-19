@@ -565,7 +565,7 @@ public class Main {
         }
 
         private void viewResults() {
-            Dialog dialog = new Dialog(this, "Individual Quiz Results", false);
+            Frame dialog = new Frame("Individual Quiz Results");
             dialog.setLayout(new BorderLayout(8, 8));
 
             Choice quizChoice = new Choice();
@@ -656,6 +656,11 @@ public class Main {
             dialog.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
+                    dialog.setVisible(false);
+                    dialog.dispose();
+                }
+                @Override
+                public void windowClosed(WindowEvent e) {
                     dialog.dispose();
                 }
             });
