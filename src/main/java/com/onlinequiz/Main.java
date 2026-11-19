@@ -577,7 +577,7 @@ public class Main {
             Label timerLabel=new Label("",Label.CENTER);timerLabel.setFont(new Font("Arial",Font.BOLD,18));
             Label progress=new Label("",Label.CENTER);
             TextArea questionText=new TextArea("",6,55,TextArea.SCROLLBARS_VERTICAL_ONLY);questionText.setEditable(false);
-            Choice answerChoice=new Choice();for(String opt:new String[]{"A","B","C","D"})answerChoice.add(opt);
+            Choice answerChoice=new Choice();answerChoice.add("Select answer");for(String opt:new String[]{"A","B","C","D"})answerChoice.add(opt);
             Panel center=new Panel(new BorderLayout(5,5));center.add(progress,BorderLayout.NORTH);center.add(questionText,BorderLayout.CENTER);
             Panel answerPanel=new Panel(new FlowLayout());answerPanel.add(new Label("Your answer:"));answerPanel.add(answerChoice);
             center.add(answerPanel,BorderLayout.SOUTH);
@@ -589,14 +589,14 @@ public class Main {
                 QuestionInfo q=questions.get(current[0]);
                 progress.setText("Question "+(current[0]+1)+" of "+questions.size()+" | "+(answers[current[0]]==null?"Not answered":"Answered")+(review[current[0]]?" | Marked for review":""));
                 questionText.setText(q.text()+"\n\nA. "+q.options()[0]+"\nB. "+q.options()[1]+"\nC. "+q.options()[2]+"\nD. "+q.options()[3]);
-                answerChoice.select(answers[current[0]]==null?"A":answers[current[0]]);
+                answerChoice.select(answers[current[0]]==null?"Select answer":answers[current[0]]);
                 previous.setEnabled(current[0]>0);next.setEnabled(current[0]<questions.size()-1);
                 mark.setLabel(review[current[0]]?"Unmark Review":"Mark for Review");
             };
-            answerChoice.addItemListener(e->{if(answerChoice.getSelectedItem()!=null)answers[current[0]]=answerChoice.getSelectedItem();});
-            previous.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();if(current[0]>0)current[0]--;showQuestion.run();});
-            next.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();if(current[0]<questions.size()-1)current[0]++;showQuestion.run();});
-            mark.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedItem();review[current[0]]=!review[current[0]];showQuestion.run();});
+            answerChoice.addItemListener(e->{answers[current[0]]=answerChoice.getSelectedIndex()==0?null:answerChoice.getSelectedItem();});
+            previous.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedIndex()==0?null:answerChoice.getSelectedItem();if(current[0]>0)current[0]--;showQuestion.run();});
+            next.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedIndex()==0?null:answerChoice.getSelectedItem();if(current[0]<questions.size()-1)current[0]++;showQuestion.run();});
+            mark.addActionListener(e->{answers[current[0]]=answerChoice.getSelectedIndex()==0?null:answerChoice.getSelectedItem();review[current[0]]=!review[current[0]];showQuestion.run();});
             final boolean[] submitted={false};
             Runnable finish=()->{
                 if(submitted[0])return;
@@ -609,7 +609,7 @@ public class Main {
                 loadQuizzes();
             };
             submit.addActionListener(e->{
-                answers[current[0]]=answerChoice.getSelectedItem();
+                answers[current[0]]=answerChoice.getSelectedIndex()==0?null:answerChoice.getSelectedItem();
                 int confirm=JOptionPane.showConfirmDialog(exam,"Submit your quiz now?","Confirm submission",JOptionPane.YES_NO_OPTION);
                 if(confirm==JOptionPane.YES_OPTION)finish.run();
             });
