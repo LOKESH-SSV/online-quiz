@@ -813,8 +813,29 @@ public class Main {
                         .append(" | Attempts: ").append(rs.getInt("attempts")).append("\n");
                 if(rank==1)sb.append("No quiz results yet.");
             }catch(SQLException ex){sb.append("Error: ").append(ex.getMessage());}
-            TextArea area=new TextArea(sb.toString(),18,65,TextArea.SCROLLBARS_VERTICAL_ONLY);area.setEditable(false);
-            Dialog d=new Dialog(this,"Student Leaderboard",true);d.add(area);d.setSize(600,400);d.setLocationRelativeTo(this);d.setVisible(true);
+            TextArea area=new TextArea(sb.toString(),18,65,TextArea.SCROLLBARS_VERTICAL_ONLY);
+            area.setEditable(false);
+
+            Dialog d=new Dialog(this,"Student Leaderboard",true);
+            d.setLayout(new BorderLayout(8,8));
+            d.add(area,BorderLayout.CENTER);
+
+            Panel controls=new Panel(new FlowLayout(FlowLayout.RIGHT));
+            Button close=button("Close");
+            close.addActionListener(e -> d.dispose());
+            controls.add(close);
+            d.add(controls,BorderLayout.SOUTH);
+
+            d.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    d.dispose();
+                }
+            });
+
+            d.setSize(600,400);
+            d.setLocationRelativeTo(this);
+            d.setVisible(true);
         }
 
         private List<QuestionInfo> getQuestions(int quizId) {
