@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import javax.swing.JOptionPane;
 import javax.swing.Timer;
 
@@ -247,7 +248,7 @@ public class Main {
 
         private void loadQuizzes() {
             StringBuilder sb = new StringBuilder("YOUR QUIZZES\n==============================================\n");
-            String sql = "SELECT quiz_id,title,subject,duration,status,start_at,end_at FROM quizzes WHERE teacher_id=? ORDER BY quiz_id DESC";
+            String sql = "SELECT quiz_id,title,subject,duration,status,start_at,end_at,access_code FROM quizzes WHERE teacher_id=? ORDER BY quiz_id DESC";
             try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
                 ps.setInt(1, teacherId);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -257,6 +258,7 @@ public class Main {
                             .append(rs.getString("status")).append(" | ")
                             .append(rs.getString("start_at") == null ? "No start date" : rs.getString("start_at"))
                             .append(" to ").append(rs.getString("end_at") == null ? "No end date" : rs.getString("end_at"))
+                            .append(" | Access code: ").append(rs.getString("access_code") == null ? "Generated when published" : rs.getString("access_code"))
                             .append("\n");
                 }
             } catch (SQLException e) { sb.append("Error: ").append(e.getMessage()); }
@@ -555,9 +557,10 @@ public class Main {
                     try (ResultSet rs = ps.executeQuery()) { rs.next(); count = rs.getInt(1); }
                 }
                 if (count == 0) { message(this, "Add at least one question before publishing.", "Cannot publish"); return; }
-                try (PreparedStatement ps = c.prepareStatement("UPDATE quizzes SET status='PUBLISHED' WHERE quiz_id=? AND teacher_id=? AND status='DRAFT'")) {
-                    ps.setInt(1, id); ps.setInt(2, teacherId);
-                    if (ps.executeUpdate() == 1) message(this, "Quiz published. Students can now attempt it.", "Success");
+                String accessCode = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+                try (PreparedStatement ps = c.prepareStatement("UPDATE quizzes SET status='PUBLISHED',access_code=? WHERE quiz_id=? AND teacher_id=? AND status='DRAFT'")) {
+                    ps.setString(1, accessCode); ps.setInt(2, id); ps.setInt(3, teacherId);
+                    if (ps.executeUpdate() == 1) message(this, "Quiz published successfully. Share this access code with students:\n\n" + accessCode, "Quiz access code");
                     else message(this, "Quiz could not be published.", "Notice");
                 }
                 loadQuizzes();
@@ -693,13 +696,15 @@ public class Main {
             Panel controls = new Panel();
             Button refresh = button("Available Quizzes");
             Button attempt = button("Attempt Selected Quiz");
+            Button joinCode = button("Join with Access Code");
             Button history = button("My Results");
             Button leaderboard = button("Leaderboard");
             Button logout = button("Logout");
-            controls.add(refresh); controls.add(attempt); controls.add(history); controls.add(leaderboard); controls.add(logout);
+            controls.add(refresh); controls.add(attempt); controls.add(joinCode); controls.add(history); controls.add(leaderboard); controls.add(logout);
             add(controls, BorderLayout.SOUTH);
             refresh.addActionListener(e -> loadQuizzes());
             attempt.addActionListener(e -> attemptQuiz());
+            joinCode.addActionListener(e -> joinQuizWithCode());
             history.addActionListener(e -> showHistory());
             leaderboard.addActionListener(e -> showLeaderboard());
             logout.addActionListener(e -> { dispose(); new LoginFrame().setVisible(true); });
@@ -736,6 +741,33 @@ public class Main {
             output.setText(sb.toString());
         }
 
+        private void joinQuizWithCode() {
+            String code = JOptionPane.showInputDialog(this, "Enter the access code provided by your faculty:", "Join Quiz", JOptionPane.QUESTION_MESSAGE);
+            if (code == null || code.trim().isEmpty()) return;
+            String sql = """
+                SELECT q.quiz_id,q.title,q.subject,q.duration
+                FROM quizzes q
+                WHERE UPPER(q.access_code)=UPPER(?) AND q.status='PUBLISHED'
+                  AND (q.start_at IS NULL OR datetime('now','localtime') >= datetime(q.start_at))
+                  AND (q.end_at IS NULL OR datetime('now','localtime') <= datetime(q.end_at))
+                  AND NOT EXISTS (SELECT 1 FROM results r WHERE r.quiz_id=q.quiz_id AND r.student_id=?)
+                """;
+            try (Connection con = Database.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+                ps.setString(1, code.trim());
+                ps.setInt(2, studentId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        message(this, "Invalid code, quiz not yet available, or you have already attempted this quiz.", "Cannot join quiz");
+                        return;
+                    }
+                    QuizInfo selected = new QuizInfo(rs.getInt("quiz_id"), rs.getString("title"), rs.getString("subject"), rs.getInt("duration"));
+                    startQuiz(selected);
+                }
+            } catch (SQLException ex) {
+                message(this, "Could not join quiz: " + ex.getMessage(), "Database error");
+            }
+        }
+
         private void attemptQuiz() {
             if (quizzes.isEmpty()) { message(this,"No available quizzes. Refresh the list.","No quizzes"); return; }
             Choice choice=new Choice();
@@ -743,6 +775,10 @@ public class Main {
             Panel select=new Panel(new FlowLayout());select.add(new Label("Choose quiz:"));select.add(choice);
             if(JOptionPane.showConfirmDialog(this,select,"Select quiz",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
             QuizInfo selected=quizzes.get(choice.getSelectedIndex());
+            startQuiz(selected);
+        }
+
+        private void startQuiz(QuizInfo selected) {
             List<QuestionInfo> questions=getQuestions(selected.id());
             if(questions.isEmpty()){message(this,"This quiz has no questions.","Unavailable");return;}
             String[] answers=new String[questions.size()];
