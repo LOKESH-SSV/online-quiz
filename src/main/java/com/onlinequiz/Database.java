@@ -59,6 +59,7 @@ public final class Database {
               duration INTEGER NOT NULL CHECK(duration > 0),
               start_at TEXT,
               end_at TEXT,
+              access_code TEXT UNIQUE,
               status TEXT NOT NULL DEFAULT 'DRAFT'
                 CHECK(status IN ('DRAFT','PUBLISHED','CLOSED')),
               created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -111,6 +112,10 @@ public final class Database {
             // Safe upgrades for databases created by earlier application versions.
             addColumnIfMissing(c, "quizzes", "start_at", "TEXT");
             addColumnIfMissing(c, "quizzes", "end_at", "TEXT");
+            addColumnIfMissing(c, "quizzes", "access_code", "TEXT");
+            try (Statement s = c.createStatement()) {
+                s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_access_code ON quizzes(access_code)");
+            }
         }
     }
 
