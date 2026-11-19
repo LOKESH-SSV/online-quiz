@@ -388,7 +388,7 @@ public class Main {
 
         private String csv(String value) {
             if(value==null)return "\"\"";
-            return "\"" + value.replace("\"","\\"") + "\"";
+            return "\"" + value.replace("\"", "\"\"") + "\"";
         }
 
         private Integer ownedQuizId(String prompt) {
