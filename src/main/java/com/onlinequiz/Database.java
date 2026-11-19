@@ -113,9 +113,7 @@ public final class Database {
             addColumnIfMissing(c, "quizzes", "start_at", "TEXT");
             addColumnIfMissing(c, "quizzes", "end_at", "TEXT");
             addColumnIfMissing(c, "quizzes", "access_code", "TEXT");
-            try (Statement s = c.createStatement()) {
-                s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_access_code ON quizzes(access_code)");
-            }
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_access_code ON quizzes(access_code)");
         }
     }
 
