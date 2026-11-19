@@ -565,26 +565,104 @@ public class Main {
         }
 
         private void viewResults() {
-            StringBuilder sb = new StringBuilder("STUDENT RESULTS\n============================================================\n");
-            String sql = """
-                SELECT q.title, s.name, s.email, r.score, r.total_questions, r.submitted_at
-                FROM results r JOIN quizzes q ON q.quiz_id=r.quiz_id
-                JOIN students s ON s.student_id=r.student_id
-                WHERE q.teacher_id=? ORDER BY r.submitted_at DESC
-                """;
-            try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            Dialog dialog = new Dialog(this, "Individual Quiz Results", true);
+            dialog.setLayout(new BorderLayout(8, 8));
+
+            Choice quizChoice = new Choice();
+            List<Integer> quizIds = new ArrayList<>();
+            try (Connection con = Database.getConnection();
+                 PreparedStatement ps = con.prepareStatement(
+                         "SELECT quiz_id,title,subject FROM quizzes WHERE teacher_id=? ORDER BY quiz_id DESC")) {
                 ps.setInt(1, teacherId);
                 try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) sb.append(rs.getString("title")).append(" | ")
-                            .append(rs.getString("name")).append(" (").append(rs.getString("email")).append(") | Score: ")
-                            .append(rs.getInt("score")).append("/").append(rs.getInt("total_questions"))
-                            .append(" | ").append(rs.getString("submitted_at")).append("\n");
+                    while (rs.next()) {
+                        quizIds.add(rs.getInt("quiz_id"));
+                        quizChoice.add("#" + rs.getInt("quiz_id") + " - " + rs.getString("title")
+                                + " (" + rs.getString("subject") + ")");
+                    }
                 }
-            } catch (SQLException e) { sb.append("Error: ").append(e.getMessage()); }
-            TextArea area = new TextArea(sb.toString(), 18, 75, TextArea.SCROLLBARS_BOTH);
+            } catch (SQLException ex) {
+                message(this, "Could not load quizzes: " + ex.getMessage(), "Database error");
+                return;
+            }
+
+            if (quizIds.isEmpty()) {
+                message(this, "You have not created any quizzes yet.", "No quizzes");
+                return;
+            }
+
+            TextArea area = new TextArea("", 18, 75, TextArea.SCROLLBARS_BOTH);
             area.setEditable(false);
-            Dialog dialog = new Dialog(this, "Quiz Results", true);
-            dialog.add(area); dialog.setSize(720, 400); dialog.setLocationRelativeTo(this); dialog.setVisible(true);
+            area.setFont(new Font("Monospaced", Font.PLAIN, 13));
+
+            Panel selector = new Panel(new FlowLayout(FlowLayout.LEFT));
+            selector.add(new Label("Select quiz:"));
+            selector.add(quizChoice);
+            dialog.add(selector, BorderLayout.NORTH);
+            dialog.add(area, BorderLayout.CENTER);
+
+            Button close = button("Close");
+            Panel actions = new Panel(new FlowLayout(FlowLayout.RIGHT));
+            actions.add(close);
+            dialog.add(actions, BorderLayout.SOUTH);
+
+            Runnable loadSelectedResults = () -> {
+                int quizId = quizIds.get(quizChoice.getSelectedIndex());
+                StringBuilder sb = new StringBuilder();
+                sb.append("RESULTS FOR ").append(quizChoice.getSelectedItem()).append("\\n");
+                sb.append("======================================================================\\n");
+                sb.append(String.format("%-22s %-28s %-10s %-20s%n",
+                        "STUDENT", "EMAIL", "SCORE", "SUBMITTED AT"));
+                sb.append("----------------------------------------------------------------------\\n");
+
+                String sql = """
+                    SELECT s.name,s.email,r.score,r.total_questions,r.submitted_at
+                    FROM results r
+                    JOIN students s ON s.student_id=r.student_id
+                    JOIN quizzes q ON q.quiz_id=r.quiz_id
+                    WHERE q.quiz_id=? AND q.teacher_id=?
+                    ORDER BY r.submitted_at DESC
+                    """;
+                try (Connection con = Database.getConnection();
+                     PreparedStatement ps = con.prepareStatement(sql)) {
+                    ps.setInt(1, quizId);
+                    ps.setInt(2, teacherId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        int count = 0;
+                        while (rs.next()) {
+                            count++;
+                            sb.append(String.format("%-22s %-28s %d/%d     %s%n",
+                                    rs.getString("name"), rs.getString("email"),
+                                    rs.getInt("score"), rs.getInt("total_questions"),
+                                    rs.getString("submitted_at")));
+                        }
+                        if (count == 0) sb.append("No students have attempted this quiz yet.\\n");
+                        else sb.append("\\nTotal submissions: ").append(count).append("\\n");
+                    }
+                } catch (SQLException ex) {
+                    sb.append("Could not load results: ").append(ex.getMessage());
+                }
+                area.setText(sb.toString());
+                area.setCaretPosition(0);
+            };
+
+            quizChoice.addItemListener(e -> loadSelectedResults.run());
+            close.addActionListener(e -> {
+                dialog.setVisible(false);
+                dialog.dispose();
+            });
+            dialog.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    dialog.setVisible(false);
+                    dialog.dispose();
+                }
+            });
+
+            loadSelectedResults.run();
+            dialog.setSize(850, 460);
+            dialog.setLocationRelativeTo(this);
+            dialog.setVisible(true);
         }
     }
 
