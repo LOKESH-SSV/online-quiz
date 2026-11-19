@@ -9,7 +9,6 @@ import javax.swing.JOptionPane;
 
 public class Main {
     private static final Color NAVY = new Color(30, 48, 80);
-    private static final Color BLUE = new Color(45, 105, 180);
     private static final Font TITLE = new Font("Arial", Font.BOLD, 23);
     private static final Font NORMAL = new Font("Arial", Font.PLAIN, 14);
 
@@ -560,8 +559,6 @@ public class Main {
     private static Button button(String text) {
         Button b = new Button(text);
         b.setFont(NORMAL);
-        b.setBackground(BLUE);
-        b.setForeground(Color.WHITE);
         return b;
     }
 }
