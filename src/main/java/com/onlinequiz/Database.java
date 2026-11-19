@@ -57,6 +57,8 @@ public final class Database {
               title TEXT NOT NULL,
               subject TEXT NOT NULL,
               duration INTEGER NOT NULL CHECK(duration > 0),
+              start_at TEXT,
+              end_at TEXT,
               status TEXT NOT NULL DEFAULT 'DRAFT'
                 CHECK(status IN ('DRAFT','PUBLISHED','CLOSED')),
               created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +108,21 @@ public final class Database {
         };
         try (Connection c = getConnection(); Statement s = c.createStatement()) {
             for (String q : sql) s.execute(q);
+            // Safe upgrades for databases created by earlier application versions.
+            addColumnIfMissing(c, "quizzes", "start_at", "TEXT");
+            addColumnIfMissing(c, "quizzes", "end_at", "TEXT");
+        }
+    }
+
+    private static void addColumnIfMissing(Connection c, String table, String column, String type)
+            throws SQLException {
+        boolean exists = false;
+        try (Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) if (column.equalsIgnoreCase(rs.getString("name"))) exists = true;
+        }
+        if (!exists) try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
     }
 }
