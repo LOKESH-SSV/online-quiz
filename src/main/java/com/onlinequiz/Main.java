@@ -649,8 +649,10 @@ public class Main {
             quizChoice.addItemListener(e -> loadSelectedResults.run());
             // Keep the results window modeless so it never traps the teacher
             // in a modal event loop. Both Close and the title-bar X dispose it.
-            close.addActionListener(e -> dialog.dispose());
-            dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            close.addActionListener(e -> {
+                dialog.setVisible(false);
+                dialog.dispose();
+            });
             dialog.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
