@@ -1,0 +1,8 @@
+target/
+*.class
+database/*.db
+database/*.db-shm
+database/*.db-wal
+.idea/
+.vscode/
+.DS_Store
